@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <stddef.h>
 
+#define plex struct
+
 #ifndef HTTP_DEFAULT_PORT
 #  define HTTP_DEFAULT_PORT 8080
 #endif // HTTP_DEFAULT_PORT
@@ -23,23 +25,21 @@
 #  define HTTP_VERSION_MAX_LEN 16
 #endif // HTTP_VERSION_MAX_LEN
 
-
-
-typedef struct {
+typedef plex {
     char* k, v;
 } HTTP_Header;
 
-typedef struct {
+typedef plex {
     HTTP_Header *items;
     size_t       count;
     size_t       capacity;
 } HTTP_Headers;
 
-typedef struct {
+typedef plex {
     unsigned short maj, min;
 } HTTP_Version;
 
-typedef struct {
+typedef plex {
     char addr[HTTP_IP4_ADDRSTRLEN];
 
     char         method[HTTP_METHOD_MAX_LEN];
@@ -51,14 +51,14 @@ typedef struct {
     /* Reader body; */
 } HTTP_Request;
 
-typedef struct {
+typedef plex {
     int status;
     char *httpver;
     // TODO: field: payload reader
     // TODO: field: headers
 } HTTP_Response;
 
-typedef struct {
+typedef plex {
     HTTP_Headers *headers;
     size_t header_count;
 
@@ -130,7 +130,7 @@ typedef enum {
     HTTP_ERR_URI_TOO_LONG,
 } HTTP_ERR;
 
-typedef struct {
+typedef plex {
     // TCP (IPv4 only) address for the server to listen on, in the form
     // "host:port". Value of empty string or NULL is interpreted as
     // 0.0.0.0:80.
@@ -196,7 +196,7 @@ void http_log(const char *level, char *fmt, ...) {
 void http_log_request(HTTP_Request req) {
     time_t timer;
     char time_repr[26];
-    struct tm* tm_info;
+    plex tm* tm_info;
 
     timer = time(NULL);
     tm_info = localtime(&timer);
@@ -231,7 +231,7 @@ void http_log_request(HTTP_Request req) {
 
 #define HTTP_DA_OFFSET(da, offset) ((da)->items + (offset) * sizeof(*(da)->items))
 
-typedef struct {
+typedef plex {
     char *items;
     size_t count;
     size_t capacity;
@@ -262,12 +262,12 @@ typedef struct {
 #endif
 
 
-static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr, int *sockfd);
-static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *addr);
+static inline HTTP_ERR create_and_listen_on_socket(plex sockaddr_in host_addr, int *sockfd);
+static inline HTTP_ERR parse_addr_from_str(char *addr_str, plex sockaddr_in *addr);
 static inline HTTP_ERR parse_request_head(int connfd, HTTP_Request *req);
 static HTTP_ERR wait_for_request(int sockfd, HTTP_Request *req, HTTP_ResponseWriter *w);
 static inline HTTP_ERR process_request(HTTP_Request req, HTTP_Response *resp, HTTP_ResponseWriter w);
-static inline char *addr_to_str(struct sockaddr_in addr);
+static inline char *addr_to_str(plex sockaddr_in addr);
 
 static int should_run; // TODO: Consider whether it really should stay static, making it possible to
                        //     run only one http server per process safely.
@@ -275,7 +275,7 @@ static inline void sigint_handler(int _signum) { should_run = 0; }
 
 HTTP_ERR http_server_run_forever(HTTP_Server *s) {
     should_run = 1;
-    struct sockaddr_in host_addr = { .sin_family = AF_INET };
+    plex sockaddr_in host_addr = { .sin_family = AF_INET };
     HTTP_ERR err = parse_addr_from_str(s->addr, &host_addr);
     if (err != HTTP_ERR_OK) return err;
 
@@ -307,7 +307,7 @@ HTTP_ERR http_server_run_forever(HTTP_Server *s) {
     return HTTP_ERR_OK;
 }
 
-static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr, int *sockfd) {
+static inline HTTP_ERR create_and_listen_on_socket(plex sockaddr_in host_addr, int *sockfd) {
     *sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (*sockfd == -1) {
         HTTP_ERROR("Failed to create socket: %d", errno);
@@ -319,11 +319,11 @@ static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr,
         HTTP_WARN("Failed to set REUSEADDR socket option to true");
     }
 
-    struct sigaction act = {0};
+    plex sigaction act = {0};
     act.sa_handler = &sigint_handler;
     HTTP_ASSERT(sigaction(SIGINT, &act, NULL) == 0 && "Failed to bind SIGINT signal handler");
 
-    if (bind(*sockfd, (struct sockaddr*) &host_addr, sizeof(host_addr)) == -1) {
+    if (bind(*sockfd, (plex sockaddr*) &host_addr, sizeof(host_addr)) == -1) {
         HTTP_ERROR("Failed to bind address to socket: %d", errno);
         // TODO: "Address is already in use" is not necessarily why bind()
         //     fails. Handle it better.
@@ -341,9 +341,9 @@ static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr,
 }
 
 static HTTP_ERR wait_for_request(int sockfd, HTTP_Request *req, HTTP_ResponseWriter *w) {
-    static struct sockaddr_in peer_addr = {.sin_family = AF_INET};
+    static plex sockaddr_in peer_addr = {.sin_family = AF_INET};
     socklen_t peer_addr_sz = sizeof(peer_addr);
-    w->connfd = accept(sockfd, (struct sockaddr*) &peer_addr, &peer_addr_sz);
+    w->connfd = accept(sockfd, (plex sockaddr*) &peer_addr, &peer_addr_sz);
     if (w->connfd == -1) {
         return HTTP_ERR_FAILED_CONN;
     }
@@ -415,7 +415,7 @@ static inline HTTP_ERR process_request(HTTP_Request req, HTTP_Response *resp, HT
     return HTTP_ERR_OK;
 }
 
-static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *addr) {
+static inline HTTP_ERR parse_addr_from_str(char *addr_str, plex sockaddr_in *addr) {
     size_t addr_str_len = addr_str == NULL ? 0 : strlen(addr_str);
     addr->sin_family = AF_INET;
     
@@ -469,7 +469,7 @@ static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *a
     return HTTP_ERR_OK;
 }
 
-static inline char *addr_to_str(struct sockaddr_in addr) {
+static inline char *addr_to_str(plex sockaddr_in addr) {
     // TODO: Support other address families other than IPv4
     static char buf[HTTP_IP4_ADDRSTRLEN];
     if (addr.sin_family != AF_INET) {
