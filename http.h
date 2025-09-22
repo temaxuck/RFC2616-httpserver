@@ -11,6 +11,20 @@
 #define HTTP_IP4_PORTSTRLEN 6
 #define HTTP_IP4_ADDRSTRLEN INET_ADDRSTRLEN + HTTP_IP4_PORTSTRLEN
 
+#ifndef HTTP_URI_MAX_LEN
+#  define HTTP_URI_MAX_LEN 255
+#endif // HTTP_URI_MAX_LEN
+
+#ifndef HTTP_METHOD_MAX_LEN
+#  define HTTP_METHOD_MAX_LEN 16
+#endif // HTTP_METHOD_MAX_LEN
+
+#ifndef HTTP_VERSION_MAX_LEN
+#  define HTTP_VERSION_MAX_LEN 16
+#endif // HTTP_VERSION_MAX_LEN
+
+
+
 typedef struct {
     char* k, v;
 } HTTP_Header;
@@ -21,23 +35,16 @@ typedef struct {
     size_t       capacity;
 } HTTP_Headers;
 
-typedef enum {
-    HTTP_Method_OPTIONS,
-    HTTP_Method_GET,
-    HTTP_Method_HEAD,
-    HTTP_Method_POST,
-    HTTP_Method_PUT,
-    HTTP_Method_DELETE,
-    HTTP_Method_TRACE,
-    HTTP_Method_CONNECT,
-} HTTP_Method;
+typedef struct {
+    unsigned short maj, min;
+} HTTP_Version;
 
 typedef struct {
     char addr[HTTP_IP4_ADDRSTRLEN];
 
-    HTTP_Method  method;
-    char        *uri;
-    char        *httpver;
+    char         method[HTTP_METHOD_MAX_LEN];
+    char         uri[HTTP_URI_MAX_LEN];
+    HTTP_Version httpver;
 
     HTTP_Headers headers;
 
@@ -118,6 +125,9 @@ typedef enum {
     HTTP_ERR_ADDR_IN_USE,
     HTTP_ERR_FAILED_CONN,
     HTTP_ERR_FAILED_WRITE,
+    HTTP_ERR_FAILED_READ,
+    HTTP_ERR_BAD_REQUEST,
+    HTTP_ERR_URI_TOO_LONG,
 } HTTP_ERR;
 
 typedef struct {
@@ -132,8 +142,10 @@ HTTP_ERR http_server_run_forever(HTTP_Server *s);
 
 #ifdef HTTP_IMPL
 
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,6 +158,11 @@ HTTP_ERR http_server_run_forever(HTTP_Server *s);
 #  include <assert.h>
 #  define HTTP_ASSERT assert
 #endif // HTTP_ASSERT
+
+#ifndef HTTP_REALLOC
+#  define HTTP_REALLOC realloc
+#endif // HTTP_REALLOC
+
 
 #ifndef HTTP_INFO
 #  define HTTP_INFO(...) http_log("INFO", __VA_ARGS__)
@@ -167,10 +184,6 @@ HTTP_ERR http_server_run_forever(HTTP_Server *s);
 #  define HTTP_LOG_REQUEST(req) http_log_request(req)
 #endif
 
-#ifndef CRLF
-#  define CRLF "\r\n"
-#endif
-
 void http_log(const char *level, char *fmt, ...) {
     fprintf(stderr, "[%s] ", level);
     va_list args;
@@ -189,15 +202,69 @@ void http_log_request(HTTP_Request req) {
     tm_info = localtime(&timer);
 
     strftime(time_repr, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-    HTTP_INFO("%s - %s - \"%s %s %s\"", time_repr, req.addr, req.method, req.uri, req.httpver);
+    HTTP_INFO("%s - %s - \"%s %s HTTP/%d.%d\"", time_repr, req.addr, req.method, req.uri, req.httpver.maj, req.httpver.min);
 }
+
+#define HTTP_DA_CAP_INIT 256
+
+#define HTTP_DA_RESERVE(da, req_cap) do {                               \
+        if (req_cap >= (da)->capacity) {                                \
+            if ((da)->capacity == 0)                                    \
+                (da)->capacity = HTTP_DA_CAP_INIT;                      \
+            while ((da)->capacity < req_cap)                            \
+                (da)->capacity *= 2;                                    \
+            (da)->items = HTTP_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
+            HTTP_ASSERT((da)->items != NULL && "not enough RAM to allocate for dynamic array"); \
+        }                                                               \
+    } while (0)
+
+#define HTTP_DA_APPEND(da, item) do {                                   \
+        HTTP_DA_RESERVE((da), (da)->count+1);                           \
+        (da)->items[(da)->count++] = item;                              \
+    } while(0)
+
+#define HTTP_DA_EXTEND_CARR(da, carr, carr_sz) do {                     \
+        HTTP_DA_RESERVE((da), (da)->count+carr_sz);                     \
+        for (size_t i = 0; i < carr_sz; i++)                            \
+            (da)->items[(da)->count++] = carr[i];                       \
+    } while(0)
+
+#define HTTP_DA_OFFSET(da, offset) ((da)->items + (offset) * sizeof(*(da)->items))
+
+typedef struct {
+    char *items;
+    size_t count;
+    size_t capacity;
+} HTTP_StringBuilder;
+
+#define HTTP_SB_NEW(sz) ({HTTP_StringBuilder sb = {0}; HTTP_DA_RESERVE(&sb, (sz)); sb;})
+
+#define HTTP_SB_APPEND_CSTR(sb, str) do {                    \
+        size_t slen = strlen(str);                           \
+        HTTP_DA_EXTEND_CARR((sb), (str), slen);              \
+    } while(0)
+
+#define HTTP_SB_FINISH(sb) HTTP_DA_APPEND((sb), '\0')
+
 
 #ifndef HTTP_SOCK_BACKLOG
 #define HTTP_SOCK_BACKLOG 314
 #endif // HTTP_SOCK_BACKLOG
 
+#ifndef HTTP_BUF_SZ
+#define HTTP_BUF_SZ 256
+#endif // HTTP_BUF_SZ
+
+#ifndef CRLF
+#  define CRLF "\r\n"
+#  define CR '\r'
+#  define LF '\n'
+#endif
+
+
 static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr, int *sockfd);
 static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *addr);
+static inline HTTP_ERR parse_request_head(int connfd, HTTP_Request *req);
 static HTTP_ERR wait_for_request(int sockfd, HTTP_Request *req, HTTP_ResponseWriter *w);
 static inline HTTP_ERR process_request(HTTP_Request req, HTTP_Response *resp, HTTP_ResponseWriter w);
 static inline char *addr_to_str(struct sockaddr_in addr);
@@ -275,15 +342,64 @@ static inline HTTP_ERR create_and_listen_on_socket(struct sockaddr_in host_addr,
 
 static HTTP_ERR wait_for_request(int sockfd, HTTP_Request *req, HTTP_ResponseWriter *w) {
     static struct sockaddr_in peer_addr = {.sin_family = AF_INET};
-    socklen_t peer_addr_size = sizeof(peer_addr);
-    w->connfd = accept(sockfd, (struct sockaddr*) &peer_addr, &peer_addr_size);
+    socklen_t peer_addr_sz = sizeof(peer_addr);
+    w->connfd = accept(sockfd, (struct sockaddr*) &peer_addr, &peer_addr_sz);
     if (w->connfd == -1) {
         return HTTP_ERR_FAILED_CONN;
     }
     strcpy(req->addr, addr_to_str(peer_addr));
 
-    HTTP_TODO("Read request-line, headers");
+    return parse_request_head(w->connfd, req);
+}
 
+static inline HTTP_ERR parse_request_head(int connfd, HTTP_Request *req) {
+    char buf[HTTP_BUF_SZ];
+    HTTP_StringBuilder sb = HTTP_SB_NEW(HTTP_BUF_SZ);
+    
+    // Request-Line
+    // TODO: Do not read indefinetely, instead have HTTP_REQUEST_HEAD_MAXLEN
+    size_t rl_end_idx = 0;
+    bool rl_parsed = false;
+    for (;!rl_parsed;) {
+        size_t nbytes = read(connfd, buf, HTTP_BUF_SZ);
+        if (nbytes == 0) return HTTP_ERR_BAD_REQUEST;
+        if (nbytes < 0) return HTTP_ERR_FAILED_READ;
+
+        for (size_t i = 0; i < nbytes - 1; rl_end_idx++, i++) {
+            if (buf[i] == CR && buf[i+1] == LF)  {
+                rl_end_idx++;
+                rl_parsed = true;
+                break;
+            }
+        }
+        HTTP_SB_APPEND_CSTR(&sb, buf);
+    }
+    
+    size_t i = 0, tstart = 0, tend = 0;
+
+    // TODO: Implement a proper parser for that
+    // Method
+    for (;i <= rl_end_idx && isspace(sb.items[i]); i++); // skip ws
+    tstart = i;
+    for (; i <= HTTP_METHOD_MAX_LEN && i <= rl_end_idx && !isspace(sb.items[i]); i++);
+    if (!isspace(sb.items[i])) return HTTP_ERR_BAD_REQUEST;
+    tend = i;
+    strncpy(req->method, sb.items, tend - tstart);
+
+    // URL
+    for (;i <= rl_end_idx && isspace(sb.items[i]); i++); // skip ws
+    tstart = i;
+    for (; i <= HTTP_URI_MAX_LEN && i <= rl_end_idx && !isspace(sb.items[i]); i++);
+    if (!isspace(sb.items[i])) return HTTP_ERR_URI_TOO_LONG;
+    tend = i;
+    strncpy(req->uri, HTTP_DA_OFFSET(&sb, tstart), tend - tstart);
+
+    // HTTP version
+    for (;i <= rl_end_idx && isspace(sb.items[i]); i++); // skip ws
+    tstart = i;
+    size_t inputs_read = sscanf(HTTP_DA_OFFSET(&sb, tstart), "HTTP/%hu.%hu", &req->httpver.maj, &req->httpver.min);
+    if (inputs_read < 1) return HTTP_ERR_BAD_REQUEST;
+    
     return HTTP_ERR_OK;
 }
 
@@ -302,8 +418,7 @@ static inline HTTP_ERR process_request(HTTP_Request req, HTTP_Response *resp, HT
 static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *addr) {
     size_t addr_str_len = addr_str == NULL ? 0 : strlen(addr_str);
     addr->sin_family = AF_INET;
-    // .sin_port = htons(s->port), .sin_addr = s->host
-
+    
     if (addr_str_len == 0) {
         sprintf(addr_str, "0.0.0.0:%d", HTTP_DEFAULT_PORT);
         addr->sin_addr.s_addr = htonl(INADDR_ANY);
@@ -355,7 +470,7 @@ static inline HTTP_ERR parse_addr_from_str(char *addr_str, struct sockaddr_in *a
 }
 
 static inline char *addr_to_str(struct sockaddr_in addr) {
-    // TODO: Support other adress families other than IPv4
+    // TODO: Support other address families other than IPv4
     static char buf[HTTP_IP4_ADDRSTRLEN];
     if (addr.sin_family != AF_INET) {
         sprintf(buf, "(unsupported AF)");

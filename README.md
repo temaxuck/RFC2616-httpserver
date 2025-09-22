@@ -15,11 +15,8 @@ Here's an example of **main.c**:
 #include "http.h"
 
 int main(void) {
-    HTTP_Server s = {0};
-    int err = http_server_run_forever(&s);
-    if (err != HTTP_ERR_OK) {
-        HTTP_ERROR("Failed to start server: %d", err);
-    };
+    HTTP_Server s = {.addr=":8080"};
+    return http_server_run_forever(&s);
 }
 ```
 
