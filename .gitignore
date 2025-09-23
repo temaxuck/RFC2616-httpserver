@@ -1,7 +1,12 @@
 # -*- mode: gitignore; -*-
 
+*.old
+
+# astyle
+*.orig
+
 # nob
-nob*
+nob
 
 # Emacs
 *~
