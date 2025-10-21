@@ -5,20 +5,14 @@ Transfer Protocol -- HTTP/1.1](https://www.rfc-editor.org/rfc/rfc2616).
 
 > [!WARNING]
 > This project was created **solely for learning purposes** — to explore how
-> one might implement a simple HTTP server in C.
+> one might implement HTTP library from scratch in C.
+
+> [!WARNING]
+> This project is still WIP.
 
 ## Usage
 
-Here's an example of **main.c**:
-```c
-#define HTTP_IMPL
-#include "http.h"
-
-int main(void) {
-    HTTP_Server s = {.addr=":8080"};
-    return http_server_run_forever(&s);
-}
-```
+#### TODO: Quick-start guide
 
 There are 4 levels of logs: `TODO`, `INFO`, `WARN`, `ERROR`. To disable any of
 them you should simply redefine macro `HTTP_<LEVEL>(...)` to nothing before
