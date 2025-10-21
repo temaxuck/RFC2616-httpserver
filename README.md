@@ -14,14 +14,19 @@ Small HTTP library, written in C from scratch.
 #### TODO: Quick-start guide
 
 There are 4 levels of logs: `TODO`, `INFO`, `WARN`, `ERROR`. To disable any of
-them you should simply redefine macro `HTTP_<LEVEL>(...)` to nothing before
-including `http.h`, e.g.:
+them you should simply redefine macro `HTTP_<LEVEL>(...)` to nothing at the
+top of the script, e.g.:
+
 ```c
 #define HTTP_TODO(...)
 #define HTTP_INFO(...)
 #define HTTP_WARN(...)
 #define HTTP_ERROR(...)
 
-#define HTTP_IMPL
-#include "http.h"
+#define HTTP_PARSER_IMPL
+#include "parser.h"
+#define HTTP_SOCK_IMPL
+#include "socket.h"
+
+// rest of your code
 ```
