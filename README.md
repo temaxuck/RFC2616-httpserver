@@ -1,7 +1,6 @@
-# RFC2616 HTTP Server
+# httplib
 
-An implementation of an HTTP server in C, following [RFC 2616 Hypertext
-Transfer Protocol -- HTTP/1.1](https://www.rfc-editor.org/rfc/rfc2616).
+Small HTTP library, written in C from scratch.
 
 > [!WARNING]
 > This project was created **solely for learning purposes** — to explore how
