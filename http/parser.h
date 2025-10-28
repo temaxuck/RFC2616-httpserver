@@ -566,11 +566,6 @@ static HTTP_Err _receive_msg(HTTP_Parser *p, HTTP_Parser_Message *msg) {
  * Parses HTTP version from input string `s` into `hv`.
  *
  * Returns number of characters read, or -1 if failed to parse.
- *
- * NOTE: Although, it starts with _parse, it accepts non-standard for such
- *       function arguments (not just HTTP_Parser *p).
- * TODO: Have a consistent function naming and easy-to-guess arguments from
- *       the name.
  */
 static int _parse_version(const char *s, HTTP_Version *hv) {
     int n;

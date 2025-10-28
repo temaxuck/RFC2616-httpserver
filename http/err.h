@@ -1,23 +1,24 @@
 #ifndef HTTP_ERR_H
 #define HTTP_ERR_H
 
-#define HTTP_ERR_MAP(XX)                                            \
-    /* General errors: */                                           \
-    XX(0, OK,          "OK")                                        \
-    XX(1, BAD_SOCK,    "Bad socket (probably closed)")              \
-    XX(2, FAILED_SOCK, "Failed to create socket")                   \
-    XX(3, ADDR_IN_USE, "Address already in use")                    \
-    XX(4, OOM,         "Out of memory")                             \
-    XX(5, OOB,         "Out of bounds")                             \
-    /* IO errors */                                                 \
-    XX(6, FAILED_READ, "Failed to read from socket")                \
-    XX(7, EOF,         "Tried to read from consumed connection")    \
-    /* Parser errors: */                                            \
-    XX(8, FAILED_PARSE, "Failed to parse HTTP Message")             \
-    XX(9, URI_TOO_LONG, "Encountered too long URI")                 \
-    XX(10, WRONG_STAGE, "Tried to parse message with parser being at wrong stage")\
-    /* Implementation errors */                                     \
-    XX(10, NOT_IMPLEMENTED, "Feature not implemented yet")
+#define HTTP_ERR_MAP(XX)                                                \
+    /* General errors: */                                               \
+    XX(0, OK,          "OK")                                            \
+    XX(1, BAD_SOCK,    "Bad socket")                                    \
+    XX(2, FAILED_SOCK, "Failed to create socket")                       \
+    XX(3, BAD_ADDR,    "Bad address")                                   \
+    XX(4, ADDR_IN_USE, "Address already in use")                        \
+    XX(5, OOM,         "Out of memory")                                 \
+    XX(6, OOB,         "Out of bounds")                                 \
+    /* IO errors */                                                     \
+    XX(7, FAILED_READ, "Failed to read from socket")                    \
+    XX(8, EOF,         "Tried to read from consumed connection")        \
+    /* Parser errors: */                                                \
+    XX(9, FAILED_PARSE, "Failed to parse HTTP Message")                 \
+    XX(10, URI_TOO_LONG, "Encountered too long URI")                    \
+    XX(11, WRONG_STAGE, "Tried to parse message with parser being at wrong stage") \
+    /* Implementation errors */                                         \
+    XX(12, NOT_IMPLEMENTED, "Feature not implemented yet")
 
 typedef enum {
 #define XX(num, name, ...) HTTP_ERR_##name = num,
