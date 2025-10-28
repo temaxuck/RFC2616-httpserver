@@ -6,15 +6,6 @@
 #include <string.h>
 #include "common.h"
 
-#ifndef HTTP_REALLOC
-#  define HTTP_REALLOC realloc
-#endif // HTTP_REALLOC
-
-#ifndef HTTP_ASSERT
-#  include <assert.h>
-#  define HTTP_ASSERT assert
-#endif // HTTP_ASSERT
-
 #define HTTP_DA_INIT_CAP 16
 
 #define http_da_reserve(da, expected_cap) do {                          \

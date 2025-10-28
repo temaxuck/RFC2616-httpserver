@@ -5,6 +5,10 @@
 
 #define plex struct
 
+#ifndef HTTP_REALLOC
+#  define HTTP_REALLOC realloc
+#endif // HTTP_REALLOC
+
 #ifndef HTTP_ASSERT
 #  include <assert.h>
 #  define HTTP_ASSERT assert
