@@ -1,3 +1,17 @@
+/*
+ * socket.h - Socket management.
+ *
+ * The maximum number of pending connections is defined by
+ * `HTTP_SOCK_BACKLOG`. By default, it is set to 420, but you may re-define it
+ * to custom value, like this:
+ *
+ * ```c
+ * #define HTTP_SOCK_BACKLOG 9999
+ * #include "http/socket.h"
+ * ```
+ *
+ * NOTE: So far, this library has only synchronous implementation.
+ */
 #ifndef HTTP_SOCK_H
 #  define HTTP_SOCK_H
 
