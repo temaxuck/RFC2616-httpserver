@@ -1,6 +1,7 @@
 #ifndef HTTP_COMMON_H
 #  define HTTP_COMMON_H
 
+#include <stdlib.h>
 #include <string.h>
 
 #define plex struct
@@ -26,6 +27,10 @@
 #  define HTTP_VERSION_MAX_LEN 16
 #endif // HTTP_VERSION_MAX_LEN
 
+#ifndef HTTP_PARSER_URI_MAX_LEN
+#  define HTTP_PARSER_URI_MAX_LEN 256
+#endif // HTTP_PARSER_URI_MAX_LEN
+
 typedef plex {
     char *k, *v;
 } HTTP_Header;
@@ -38,6 +43,10 @@ typedef plex {
 typedef plex {
     unsigned short maj, min;
 } HTTP_Version;
+
+typedef plex {
+    char repr[HTTP_PARSER_URI_MAX_LEN];
+} HTTP_URI;
 
 // NOTE: For now, only default methods (as specified by RFC 2616) are allowed
 #define HTTP_METHOD_MAP(XX)                     \
@@ -120,6 +129,32 @@ typedef enum {
     HTTP_STATUS_MAP(XX)
 #undef XX
 } HTTP_Status;
+
+/**
+ * Frees `uri`.
+ */
+void http_uri_free(HTTP_URI *uri) {
+    free(uri->repr);
+}
+
+/**
+ * Frees header `h`.
+ */
+void http_header_free(HTTP_Header *h) {
+    free(h->k);
+    free(h->v);
+}
+
+/**
+ * Frees headers `hs`.
+ */
+void http_headers_free(HTTP_Headers *hs) {
+    for (size_t i = 0; i < hs->len; i++) {
+        http_header_free(&hs->items[i]);
+    }
+    free(hs->items);
+}
+
 #endif // HTTP_COMMON_H
 
 /*
