@@ -15,6 +15,8 @@
 #ifndef HTTP_SOCK_H
 #  define HTTP_SOCK_H
 
+#include <stddef.h>
+
 #include "err.h"
 
 // NOTE: INET6_ADDRSTRLEN + 2 (from "[]") + 6 (from ":" and port representation)
@@ -59,6 +61,7 @@ HTTP_Err http_sock_close(int sockfd);
 #  ifndef HTTP_SOCK_IMPL_GUARD
 #    define HTTP_SOCK_IMPL_GUARD
 
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
 #include <signal.h>
