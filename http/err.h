@@ -1,6 +1,8 @@
 #ifndef HTTP_ERR_H
 #define HTTP_ERR_H
 
+#include "common.h"
+
 #define HTTP_ERR_MAP(XX)                                                \
     /* General errors: */                                               \
     XX(0, OK,          "OK")                                            \
@@ -25,11 +27,6 @@ typedef enum {
     HTTP_ERR_MAP(XX)
 #undef XX
 } HTTP_Err;
-
-#ifndef HTTP_ASSERT
-#  include <assert.h>
-#  define HTTP_ASSERT assert
-#endif
 
 char *http_err_to_cstr(HTTP_Err err) {
 #define XX(num, name, repr) if (err == num) return repr;
