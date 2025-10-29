@@ -73,6 +73,7 @@
 #  define HTTP_PARSER_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "common.h"
 #ifdef HTTP_PARSER_IMPL
@@ -93,10 +94,6 @@ typedef enum {
 #endif // HTTP_PARSER_URI_MAX_LEN
 
 typedef plex {
-    char repr[HTTP_PARSER_URI_MAX_LEN];
-} HTTP_URI;
-
-typedef plex {
     // It is expected that the connection socket is opened and is ready
     // for reading
     int connfd;
@@ -112,8 +109,8 @@ typedef plex {
     HTTP_Headers headers;
     uint64_t content_length;
 
-    IO_Buffer *_buffer;
-    IO_Reader *_reader;
+    IO_Buffer _buffer;
+    IO_Reader _reader;
     size_t _last_reader_pos;
     ssize_t _body_start_pos;
     bool _ignore_lf;
@@ -289,26 +286,20 @@ typedef plex {
     double numval;
 } HTTP_Parser_Token;
 
-static IO_Buffer *_new_buffer(size_t cap) {
-    IO_Buffer *b = HTTP_REALLOC(NULL, sizeof(IO_Buffer));
-    if (b == NULL) return NULL;
-    if (io_buffer_init(b, cap) != IO_ERR_OK) {
-        return NULL;
-    };
-    return b;
-}
-
-static IO_Reader *_new_reader(IO_Buffer *b, int fd) {
-    IO_Reader *r = HTTP_REALLOC(NULL, sizeof(IO_Reader));
-    if (r == NULL) return NULL;
-    if (io_reader_init(r, b, fd) != IO_ERR_OK) {
-        return NULL;
-    };
-    return r;
-}
-
 static void _advance_stage(HTTP_Parser *p) {
     p->stage = !http_parser_is_finished(p) ? p->stage + 1 : HTTP_PS_DONE;
+}
+
+// TODO: I know this is awful. Implement wrapper around io_* API.
+static HTTP_Err _io_err_to_http_err(IO_Err err) {
+    if (err == IO_ERR_OK) return HTTP_ERR_OK;
+    if (err == IO_ERR_OOM) return HTTP_ERR_OOM;
+    if (err == IO_ERR_OOB) return HTTP_ERR_OOB;
+    if (err == IO_ERR_EOF) return HTTP_ERR_EOF;
+    if (err == IO_ERR_PARTIAL) return HTTP_ERR_OK;
+    if (err == IO_ERR_FAILED_READ) return HTTP_ERR_FAILED_READ;
+
+    HTTP_ASSERT(false && "Unreachable");
 }
 
 HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
@@ -325,9 +316,13 @@ HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
     p->headers = (HTTP_Headers) {0};
     p->content_length = 0;
 
-    p->_buffer = _new_buffer(HTTP_PARSER_BUF_SZ);
-    p->_reader = _new_reader(p->_buffer, p->connfd);
-    p->_last_reader_pos = p->_reader->pos;
+    IO_Err err;
+    if ((err = io_buffer_init(&p->_buffer, HTTP_PARSER_BUF_SZ)) && err != IO_ERR_OK)
+        return _io_err_to_http_err(err);
+    if ((err = io_reader_init(&p->_reader, &p->_buffer, connfd)) && err != IO_ERR_OK)
+        return _io_err_to_http_err(err);
+
+    p->_last_reader_pos = p->_reader.pos;
     p->_body_start_pos = -1;
     p->_ignore_lf = false;
 
@@ -335,18 +330,18 @@ HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
 }
 
 size_t http_parser_last_read(HTTP_Parser *p) {
-    return p->_reader->pos - p->_last_reader_pos;
+    return p->_reader.pos - p->_last_reader_pos;
 }
 
 size_t http_parser_total_read(HTTP_Parser *p) {
-    return p->_reader->nread;
+    return p->_reader.nread;
 }
 
 size_t http_parser_body_size(HTTP_Parser *p) {
     if (p->_body_start_pos == -1) {
         return 0;
     }
-    return p->_reader->nread - (size_t) p->_body_start_pos;
+    return p->_reader.nread - (size_t) p->_body_start_pos;
 }
 
 bool http_parser_is_finished(HTTP_Parser *p) {
@@ -354,17 +349,9 @@ bool http_parser_is_finished(HTTP_Parser *p) {
 }
 
 HTTP_Err http_parser_free(HTTP_Parser *p) {
-    for (size_t i = 0; i < p->headers.len; i++) {
-        free(p->headers.items[i].k);
-        free(p->headers.items[i].v);
-    }
-
-    if (p->_buffer) {
-        io_buffer_free(p->_buffer);
-        free(p->_buffer);
-    }
-
-    if (p->_reader) free(p->_reader);
+    http_headers_free(&p->headers);
+    http_uri_free(&p->uri);
+    io_buffer_free(&p->_buffer);
 
     return HTTP_ERR_OK;
 }
@@ -492,32 +479,19 @@ static inline bool _token_cmp_cstr(HTTP_Parser_Token *t, const char *cstr) {
 //////////////////// END:   Lexer ////////////////////
 
 //////////////////// BEGIN: Parser ////////////////////
-
-// TODO: I know this is awful. Implement wrapper around io_* API.
-static HTTP_Err _io_err_to_http_err(IO_Err err) {
-    if (err == IO_ERR_OK) return HTTP_ERR_OK;
-    if (err == IO_ERR_OOM) return HTTP_ERR_OOM;
-    if (err == IO_ERR_OOB) return HTTP_ERR_OOB;
-    if (err == IO_ERR_EOF) return HTTP_ERR_EOF;
-    if (err == IO_ERR_PARTIAL) return HTTP_ERR_OK;
-    if (err == IO_ERR_FAILED_READ) return HTTP_ERR_FAILED_READ;
-
-    HTTP_ASSERT(false && "Unreachable");
-}
-
 static HTTP_Err _prefetch(HTTP_Parser *p) {
-    IO_Err err = io_reader_prefetch(p->_reader, p->_buffer->cap);
+    IO_Err err = io_reader_prefetch(&p->_reader, p->_buffer.cap);
     return _io_err_to_http_err(err);
 }
 
 static HTTP_Err _peek(HTTP_Parser *p, char *dest, size_t n) {
-    IO_Err err = io_reader_npeek(p->_reader, dest, n);
+    IO_Err err = io_reader_npeek(&p->_reader, dest, n);
     return _io_err_to_http_err(err);
 }
 
 static HTTP_Err _read(HTTP_Parser *p, char *dest, size_t n) {
-    p->_last_reader_pos = p->_reader->pos;
-    IO_Err err = io_reader_nread(p->_reader, dest, n);
+    p->_last_reader_pos = p->_reader.pos;
+    IO_Err err = io_reader_nread(&p->_reader, dest, n);
     return _io_err_to_http_err(err);
 }
 
@@ -530,19 +504,19 @@ static HTTP_Err _receive_msg(HTTP_Parser *p, HTTP_Parser_Message *msg) {
     HTTP_Err result = HTTP_ERR_OK;
     http_da_reset(msg);
     msg->pos = 0;
-    p->_last_reader_pos = p->_reader->pos;
+    p->_last_reader_pos = p->_reader.pos;
 
     for (;;) {
         HTTP_Err err = _prefetch(p);
         if (err != HTTP_ERR_OK) http_return_defer(err);
 
-        size_t buffered = io_buffer_len(p->_buffer);
+        size_t buffered = io_buffer_len(&p->_buffer);
         char *temp = HTTP_REALLOC(NULL, buffered);
         size_t i = 0;
         for (;i < buffered;) {
-            char c = io_buffer_at(p->_buffer, i++);
+            char c = io_buffer_at(&p->_buffer, i++);
             if (c == CR || c == LF) {
-                io_reader_nconsume(p->_reader, temp, i);
+                io_reader_nconsume(&p->_reader, temp, i);
                 http_da_append_carr(msg, temp, i);
                 if (c == CR) {
                     err = _peek(p, &c, 1);
@@ -550,12 +524,12 @@ static HTTP_Err _receive_msg(HTTP_Parser *p, HTTP_Parser_Message *msg) {
                 }
                 if (c == LF) {
                     http_da_append(msg, c);
-                    io_reader_nconsume(p->_reader, NULL, 1);
+                    io_reader_nconsume(&p->_reader, NULL, 1);
                 }
                 http_return_defer(HTTP_ERR_OK);
             }
         }
-        io_reader_nconsume(p->_reader, temp, i);
+        io_reader_nconsume(&p->_reader, temp, i);
         http_da_append_carr(msg, temp, i);
     }
  defer:
@@ -690,7 +664,7 @@ HTTP_Err http_parser_stream_body(HTTP_Parser *p, char *chunk, size_t chunk_sz) {
         return HTTP_ERR_OK;
     }
 
-    if (p->_body_start_pos == -1) p->_body_start_pos = p->_reader->pos;
+    if (p->_body_start_pos == -1) p->_body_start_pos = p->_reader.pos;
     size_t body_sz = http_parser_body_size(p);
 
     HTTP_ASSERT(body_sz <= p->content_length && "Read more than Content-Length");
