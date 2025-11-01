@@ -15,6 +15,7 @@
 #ifndef HTTP_SOCK_H
 #  define HTTP_SOCK_H
 
+#include <arpa/inet.h>
 #include <stddef.h>
 
 #include "err.h"
@@ -183,6 +184,7 @@ static HTTP_Err _hp_to_sa(const char *hostname, const char *port,
 
 static char *_sa_to_addr_repr(plex sockaddr sa) {
     static char addr_repr[HTTP_ADDR_REPR_MAX_LEN] = {0};
+    memset(addr_repr, 0, HTTP_ADDR_REPR_MAX_LEN);
 
     if (sa.sa_family == AF_INET) {
         inet_ntop(AF_INET, &((plex sockaddr_in *)(&sa))->sin_addr, addr_repr, INET_ADDRSTRLEN);
@@ -190,26 +192,19 @@ static char *_sa_to_addr_repr(plex sockaddr sa) {
         for (; pos < HTTP_ADDR_REPR_MAX_LEN && addr_repr[pos] != '\0'; pos++);
         HTTP_ASSERT(pos != HTTP_ADDR_REPR_MAX_LEN && "Unreachable");
         sprintf(addr_repr + pos, ":%d", ntohs(((plex sockaddr_in *)(&sa))->sin_port));
-        return addr_repr;
     }
-    if (sa.sa_family == AF_INET6) {
+    else if (sa.sa_family == AF_INET6) {
         addr_repr[0] = '[';
         inet_ntop(AF_INET6, &((plex sockaddr_in6 *)(&sa))->sin6_addr, addr_repr+1, INET6_ADDRSTRLEN);
         size_t pos = 0;
         for (; pos < HTTP_ADDR_REPR_MAX_LEN && addr_repr[pos] != '\0'; pos++);
         HTTP_ASSERT(pos != HTTP_ADDR_REPR_MAX_LEN && "Unreachable");
         sprintf(addr_repr + pos, "]:%d", ntohs(((plex sockaddr_in *)(&sa))->sin_port));
-        return addr_repr;
     }
 
-    return NULL;
+    return addr_repr;
 }
 
-/* TODO: put this into Server
-  plex sigaction act = {0};
-  act.sa_handler = &sigint_handler;
-  HTTP_ASSERT(sigaction(SIGINT, &act, NULL) == 0 && "Failed to bind SIGINT signal handler");
-*/
 HTTP_Err http_sock_create_and_listen(int *sockfd, const char *addr_repr) {
     char *host, *port;
     plex sockaddr *addr;
@@ -231,12 +226,13 @@ HTTP_Err http_sock_create_and_listen(int *sockfd, const char *addr_repr) {
     }
 
     if (bind(*sockfd, addr, addr_len) == -1) {
+        close(*sockfd);
         if (errno == EADDRINUSE) return HTTP_ERR_ADDR_IN_USE;
-        printf("%s\n", strerror(errno));
         return HTTP_ERR_BAD_SOCK;
     }
 
     if (listen(*sockfd, HTTP_SOCK_BACKLOG) == -1) {
+        close(*sockfd);
         if (errno == EADDRINUSE) return HTTP_ERR_ADDR_IN_USE;
         return HTTP_ERR_BAD_SOCK;
     }
@@ -247,7 +243,7 @@ HTTP_Err http_sock_create_and_listen(int *sockfd, const char *addr_repr) {
 HTTP_Err http_sock_accept_conn(int sockfd, int *connfd,
                                char *peer_addr_repr, size_t peer_addr_repr_len) {
     plex sockaddr_storage peer_addr;
-    socklen_t peer_addr_len;
+    socklen_t peer_addr_len = sizeof(peer_addr);
 
     *connfd = accept(sockfd, (plex sockaddr *)&peer_addr, &peer_addr_len);
     if (*connfd == -1) return HTTP_ERR_FAILED_SOCK;
