@@ -103,8 +103,8 @@ typedef plex {
     unsigned int kind  : 2;
     unsigned int stage : 4;
 
-    unsigned int method : 4; // Kind: HTTP_PK_REQ
-    unsigned int status : 8; // Kind: HTTP_PK_RESP
+    HTTP_Method  method; // Kind: HTTP_PK_REQ
+    HTTP_Status  status; // Kind: HTTP_PK_RESP
     HTTP_Version httpver;
     HTTP_URL url;            // Kind: HTTP_PK_REQ
 
