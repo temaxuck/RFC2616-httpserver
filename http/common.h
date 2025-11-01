@@ -44,10 +44,6 @@ typedef plex {
     unsigned short maj, min;
 } HTTP_Version;
 
-typedef plex {
-    char repr[HTTP_PARSER_URI_MAX_LEN];
-} HTTP_URI;
-
 // NOTE: For now, only default methods (as specified by RFC 2616) are allowed
 #define HTTP_METHOD_MAP(XX)                     \
     XX(0, UNKNOWN, "UNKNOWN")                   \
@@ -131,18 +127,11 @@ typedef enum {
 } HTTP_Status;
 
 /**
- * Frees `uri`.
- */
-void http_uri_free(HTTP_URI *uri) {
-    free(uri->repr);
-}
-
-/**
  * Frees header `h`.
  */
 void http_header_free(HTTP_Header *h) {
-    free(h->k);
-    free(h->v);
+    if (h->k) free(h->k);
+    if (h->v) free(h->v);
 }
 
 /**
@@ -152,7 +141,7 @@ void http_headers_free(HTTP_Headers *hs) {
     for (size_t i = 0; i < hs->len; i++) {
         http_header_free(&hs->items[i]);
     }
-    free(hs->items);
+    if (hs->items) free(hs->items);
 }
 
 #endif // HTTP_COMMON_H

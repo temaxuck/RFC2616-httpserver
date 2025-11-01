@@ -5,7 +5,7 @@
  * ---------+-----------------------------+-----------------------------------
  * Stage no |         Stage name          |         Stage result
  * ---------+-----------------------------+-----------------------------------
- *          |                             | Request: Method, URI, HTTP-Version
+ *          |                             | Request: Method, URL, HTTP-Version
  *    0     |         Start-Line          | Response: HTTP-Version,
  *          |                             |           Status-Code,
  *          |                             |           Reason-Phrase
@@ -35,7 +35,7 @@
  * // handle err
  * printf("Received request (of size %ld bytes):\n", p.nread);
  * printf("Method:       %s\n", http_method_to_cstr(p.method));
- * printf("URI:          %s\n", p.uri.repr);
+ * printf("URL:          %s\n", p.url.repr);
  * printf("HTTP Version: %hd.%hd\n", p.httpver.maj, p.httpver.min);
  * printf("Headers:\n");
  * for (size_t i = 0; i < p.headers.len; i++) {
@@ -78,8 +78,10 @@
 #include "common.h"
 #ifdef HTTP_PARSER_IMPL
 #  define IO_IMPL
+#  define HTTP_URL_IMPL
 #endif // HTTP_PARSER_IMPL
 #include "io.h"
+#include "url.h"
 
 typedef enum { HTTP_PK_REQ, HTTP_PK_RESP } HTTP_ParserKind;
 typedef enum {
@@ -89,9 +91,9 @@ typedef enum {
     HTTP_PS_DONE,
 } HTTP_ParserStage;
 
-#ifndef HTTP_PARSER_URI_MAX_LEN
-#  define HTTP_PARSER_URI_MAX_LEN 256
-#endif // HTTP_PARSER_URI_MAX_LEN
+#ifndef HTTP_PARSER_URL_MAX_LEN
+#  define HTTP_PARSER_URL_MAX_LEN 256
+#endif // HTTP_PARSER_URL_MAX_LEN
 
 typedef plex {
     // It is expected that the connection socket is opened and is ready
@@ -104,7 +106,7 @@ typedef plex {
     unsigned int method : 4; // Kind: HTTP_PK_REQ
     unsigned int status : 8; // Kind: HTTP_PK_RESP
     HTTP_Version httpver;
-    HTTP_URI uri;            // Kind: HTTP_PK_REQ
+    HTTP_URL url;            // Kind: HTTP_PK_REQ
 
     HTTP_Headers headers;
     uint64_t content_length;
@@ -312,10 +314,14 @@ HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
     p->status = HTTP_Status_UNKNOWN;
     p->httpver.maj = 0;
     p->httpver.min = 0;
+    http_url_free(&p->url);
+    p->url = (HTTP_URL) {0};
 
+    http_headers_free(&p->headers);
     p->headers = (HTTP_Headers) {0};
     p->content_length = 0;
 
+    io_buffer_free(&p->_buffer);
     IO_Err err;
     if ((err = io_buffer_init(&p->_buffer, HTTP_PARSER_BUF_SZ)) && err != IO_ERR_OK)
         return _io_err_to_http_err(err);
@@ -350,7 +356,7 @@ bool http_parser_is_finished(HTTP_Parser *p) {
 
 HTTP_Err http_parser_free(HTTP_Parser *p) {
     http_headers_free(&p->headers);
-    http_uri_free(&p->uri);
+    http_url_free(&p->url);
     io_buffer_free(&p->_buffer);
 
     return HTTP_ERR_OK;
@@ -572,19 +578,18 @@ HTTP_Err http_parser_request_line(HTTP_Parser *p) {
         p->method = http_method_from_cstr(t_cstr);
     }
 
-    // Request URI
-    // TODO: Parse URI properly
+    // Request URL
     {
         _skipws(&msg);
         size_t n = 0;
-        for (;n < HTTP_PARSER_URI_MAX_LEN + 1 && msg.pos + n < msg.len; n++) {
+        for (;n < HTTP_PARSER_URL_MAX_LEN + 1 && msg.pos + n < msg.len; n++) {
             if (_iscrlf(msg.items[msg.pos + n]) || _islws(msg.items[msg.pos + n]))
                 break;
         }
 
         if (_iscrlf(msg.items[msg.pos+n])) http_return_defer(HTTP_ERR_FAILED_PARSE);
-        if (n == HTTP_PARSER_URI_MAX_LEN) http_return_defer(HTTP_ERR_URI_TOO_LONG);
-        strncpy(p->uri.repr, &msg.items[msg.pos], n);
+        if (n == HTTP_PARSER_URL_MAX_LEN) http_return_defer(HTTP_ERR_URL_TOO_LONG);
+        http_url_parse(&p->url, &msg.items[msg.pos], n);
         _adv_n_chars(&msg, n);
     }
 

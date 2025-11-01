@@ -17,7 +17,7 @@
     XX(8, EOF,         "Tried to read from consumed connection")        \
     /* Parser errors: */                                                \
     XX(9, FAILED_PARSE, "Failed to parse HTTP Message")                 \
-    XX(10, URI_TOO_LONG, "Encountered too long URI")                    \
+    XX(10, URL_TOO_LONG, "Encountered too long URL")                    \
     XX(11, WRONG_STAGE, "Tried to parse message with parser being at wrong stage") \
     /* Implementation errors */                                         \
     XX(12, NOT_IMPLEMENTED, "Feature not implemented yet")
