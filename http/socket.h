@@ -16,6 +16,7 @@
 #  define HTTP_SOCK_H
 
 #include <arpa/inet.h>
+#include <stdbool.h>
 #include <stddef.h>
 
 #include "err.h"
@@ -56,17 +57,20 @@ HTTP_Err http_sock_accept_conn(int sockfd, int *connfd,
  */
 HTTP_Err http_sock_close(int sockfd);
 
+/**
+ * Returns string `dest` of max length `n`, that represents a remote or local
+ * (depending on flag `is_remote`) address of a socket `sockfd`.
+ */
+HTTP_Err http_sock_get_repr(int sockfd, char *dest, size_t n, bool is_remote);
+
 #endif // HTTP_SOCK_H
 
 #ifdef HTTP_SOCK_IMPL
 #  ifndef HTTP_SOCK_IMPL_GUARD
 #    define HTTP_SOCK_IMPL_GUARD
 
-#include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
-#include <signal.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -248,12 +252,30 @@ HTTP_Err http_sock_accept_conn(int sockfd, int *connfd,
     *connfd = accept(sockfd, (plex sockaddr *)&peer_addr, &peer_addr_len);
     if (*connfd == -1) return HTTP_ERR_FAILED_SOCK;
 
-    strncpy(peer_addr_repr, _sa_to_addr_repr(*(plex sockaddr *)&peer_addr), peer_addr_repr_len);
+    if (peer_addr_repr != NULL && peer_addr_repr_len > 0)
+        strncpy(peer_addr_repr, _sa_to_addr_repr(*(plex sockaddr *)&peer_addr), peer_addr_repr_len);
+
     return HTTP_ERR_OK;
 }
 
 HTTP_Err http_sock_close(int sockfd) {
     if (!close(sockfd)) return HTTP_ERR_BAD_SOCK;
+    return HTTP_ERR_OK;
+}
+
+HTTP_Err http_sock_get_repr(int sockfd, char *dest, size_t n, bool is_remote) {
+    plex sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+
+    if (is_remote) {
+        if (getpeername(sockfd, (plex sockaddr *)&addr, &addr_len) == -1)
+            return HTTP_ERR_BAD_SOCK;
+    } else {
+        if (getsockname(sockfd, (plex sockaddr *)&addr, &addr_len) == -1)
+            return HTTP_ERR_BAD_SOCK;
+    }
+
+    strncpy(dest, _sa_to_addr_repr(*(plex sockaddr *)&addr), n);
     return HTTP_ERR_OK;
 }
 
