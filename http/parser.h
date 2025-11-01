@@ -292,18 +292,6 @@ static void _advance_stage(HTTP_Parser *p) {
     p->stage = !http_parser_is_finished(p) ? p->stage + 1 : HTTP_PS_DONE;
 }
 
-// TODO: I know this is awful. Implement wrapper around io_* API.
-static HTTP_Err _io_err_to_http_err(IO_Err err) {
-    if (err == IO_ERR_OK) return HTTP_ERR_OK;
-    if (err == IO_ERR_OOM) return HTTP_ERR_OOM;
-    if (err == IO_ERR_OOB) return HTTP_ERR_OOB;
-    if (err == IO_ERR_EOF) return HTTP_ERR_EOF;
-    if (err == IO_ERR_PARTIAL) return HTTP_ERR_OK;
-    if (err == IO_ERR_FAILED_READ) return HTTP_ERR_FAILED_READ;
-
-    HTTP_ASSERT(false && "Unreachable");
-}
-
 HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
     p->kind = pk;
     p->stage = HTTP_PS_START_LINE;
@@ -323,9 +311,9 @@ HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
     io_buffer_free(&p->_buffer);
     IO_Err err;
     if ((err = io_buffer_init(&p->_buffer, HTTP_PARSER_BUF_SZ)) && err != IO_ERR_OK)
-        return _io_err_to_http_err(err);
+        return io_err_to_http_err(err);
     if ((err = io_reader_init(&p->_reader, &p->_buffer, connfd)) && err != IO_ERR_OK)
-        return _io_err_to_http_err(err);
+        return io_err_to_http_err(err);
 
     p->_last_reader_pos = p->_reader.pos;
     p->_body_start_pos = -1;
@@ -486,18 +474,18 @@ static inline bool _token_cmp_cstr(HTTP_Parser_Token *t, const char *cstr) {
 //////////////////// BEGIN: Parser ////////////////////
 static HTTP_Err _prefetch(HTTP_Parser *p) {
     IO_Err err = io_reader_prefetch(&p->_reader, p->_buffer.cap);
-    return _io_err_to_http_err(err);
+    return io_err_to_http_err(err);
 }
 
 static HTTP_Err _peek(HTTP_Parser *p, char *dest, size_t n) {
     IO_Err err = io_reader_npeek(&p->_reader, dest, n);
-    return _io_err_to_http_err(err);
+    return io_err_to_http_err(err);
 }
 
 static HTTP_Err _read(HTTP_Parser *p, char *dest, size_t n) {
     p->_last_reader_pos = p->_reader.pos;
     IO_Err err = io_reader_nread(&p->_reader, dest, n);
-    return _io_err_to_http_err(err);
+    return io_err_to_http_err(err);
 }
 
 /**

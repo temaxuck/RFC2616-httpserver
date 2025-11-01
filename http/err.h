@@ -35,6 +35,19 @@ char *http_err_to_cstr(HTTP_Err err) {
     HTTP_ASSERT(0 && "Unreachable");
 }
 
+#include "io.h"
+
+// TODO: I know this is awful. Implement wrapper around io_* API.
+HTTP_Err io_err_to_http_err(IO_Err err) {
+    if (err == IO_ERR_OK) return HTTP_ERR_OK;
+    if (err == IO_ERR_OOM) return HTTP_ERR_OOM;
+    if (err == IO_ERR_OOB) return HTTP_ERR_OOB;
+    if (err == IO_ERR_EOF) return HTTP_ERR_EOF;
+    if (err == IO_ERR_PARTIAL) return HTTP_ERR_OK;
+    if (err == IO_ERR_FAILED_READ) return HTTP_ERR_FAILED_READ;
+
+    HTTP_ASSERT(0 && "Unreachable");
+}
 #endif // HTTP_ERR_H
 
 /*
