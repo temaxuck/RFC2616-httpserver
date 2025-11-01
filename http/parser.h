@@ -35,7 +35,7 @@
  * // handle err
  * printf("Received request (of size %ld bytes):\n", p.nread);
  * printf("Method:       %s\n", http_method_to_cstr(p.method));
- * printf("URL:          %s\n", p.url.repr);
+ * printf("URL:          %s\n", p.url_str);
  * printf("HTTP Version: %hd.%hd\n", p.httpver.maj, p.httpver.min);
  * printf("Headers:\n");
  * for (size_t i = 0; i < p.headers.len; i++) {
@@ -103,10 +103,10 @@ typedef plex {
     unsigned int kind  : 2;
     unsigned int stage : 4;
 
-    HTTP_Method  method; // Kind: HTTP_PK_REQ
-    HTTP_Status  status; // Kind: HTTP_PK_RESP
+    HTTP_Method  method;  // Kind: HTTP_PK_REQ
+    HTTP_Status  status;  // Kind: HTTP_PK_RESP
     HTTP_Version httpver;
-    HTTP_URL url;            // Kind: HTTP_PK_REQ
+    char *url_str;        // Kind: HTTP_PK_REQ
 
     HTTP_Headers headers;
     uint64_t content_length;
@@ -310,15 +310,14 @@ HTTP_Err http_parser_init(HTTP_Parser *p, HTTP_ParserKind pk, int connfd) {
 
     p->connfd = connfd;
 
-    p->method = HTTP_Method_UNKNOWN;
-    p->status = HTTP_Status_UNKNOWN;
+    p->method      = HTTP_Method_UNKNOWN;
+    p->status      = HTTP_Status_UNKNOWN;
     p->httpver.maj = 0;
     p->httpver.min = 0;
-    http_url_free(&p->url);
-    p->url = (HTTP_URL) {0};
+    p->url_str     = NULL;
 
     http_headers_free(&p->headers);
-    p->headers = (HTTP_Headers) {0};
+    p->headers        = (HTTP_Headers) {0};
     p->content_length = 0;
 
     io_buffer_free(&p->_buffer);
@@ -356,7 +355,7 @@ bool http_parser_is_finished(HTTP_Parser *p) {
 
 HTTP_Err http_parser_free(HTTP_Parser *p) {
     http_headers_free(&p->headers);
-    http_url_free(&p->url);
+    if (p->url_str) free(p->url_str);
     io_buffer_free(&p->_buffer);
 
     return HTTP_ERR_OK;
@@ -589,7 +588,7 @@ HTTP_Err http_parser_request_line(HTTP_Parser *p) {
 
         if (_iscrlf(msg.items[msg.pos+n])) http_return_defer(HTTP_ERR_FAILED_PARSE);
         if (n == HTTP_PARSER_URL_MAX_LEN) http_return_defer(HTTP_ERR_URL_TOO_LONG);
-        http_url_parse(&p->url, &msg.items[msg.pos], n);
+        p->url_str = strndup(&msg.items[msg.pos], n);
         _adv_n_chars(&msg, n);
     }
 
