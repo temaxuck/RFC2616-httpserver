@@ -18,8 +18,8 @@
     } while (0)
 
 #define http_da_append(da, item) do {           \
-        http_da_reserve((da), (da)->len+1);          \
-        (da)->items[(da)->len++] = item;        \
+        http_da_reserve((da), (da)->len+1);     \
+        (da)->items[(da)->len++] = (item);      \
     } while (0)
 
 #define http_da_append_carr(da, carr, carr_len) do {                    \
@@ -32,11 +32,21 @@
 #define http_da_free(da) ({free((da)->items);})
 
 #define http_sb_append_cstr(sb, cstr) http_da_append_carr((sb), (cstr), strlen(cstr))
+#define http_sb_append_format(sb, format, ...) do {                     \
+        size_t n = snprintf(NULL, 0, format, ##__VA_ARGS__);            \
+        http_da_reserve((sb), (sb)->len + n + 1);                       \
+        n = snprintf((sb)->items + (sb)->len, n + 1, format, ##__VA_ARGS__); \
+        (sb)->len += n;                                                 \
+    } while (0)
 #define http_sb_append_substr(sb, cstr, lb, rb) do {                    \
         HTTP_ASSERT((rb) < strlen(cstr) && "Trying to append out of bounds part of string"); \
-        http_da_append_carr((sb), (cstr) + (lb), ((rb) - (lb)));    \
+        http_da_append_carr((sb), (cstr) + (lb), ((rb) - (lb)));        \
     } while (0)
 #define http_sb_append_char(sb, ch) http_da_append((sb), (ch))
+#define http_sb_finalize(sb) do {               \
+        http_da_reserve((sb), (sb)->len+1);     \
+        (sb)->items[(sb)->len] = '\0';          \
+    } while(0)
 #define http_sb_free(sb) http_da_free(sb)
 
 typedef plex {
