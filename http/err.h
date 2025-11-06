@@ -13,14 +13,15 @@
     XX(5, OOM,         "Out of memory")                                 \
     XX(6, OOB,         "Out of bounds")                                 \
     /* IO errors */                                                     \
-    XX(7, FAILED_READ, "Failed to read from socket")                    \
-    XX(8, EOF,         "Tried to read from consumed connection")        \
+    XX(7, FAILED_READ,  "Failed to read from a socket")                 \
+    XX(8, FAILED_WRITE, "Failed to write to a socket")                  \
+    XX(9, EOF,          "Tried to read from consumed connection")       \
     /* Parser errors: */                                                \
-    XX(9, FAILED_PARSE, "Failed to parse HTTP Message")                 \
-    XX(10, URL_TOO_LONG, "Encountered too long URL")                    \
-    XX(11, WRONG_STAGE, "Tried to parse message with parser being at wrong stage") \
+    XX(10, FAILED_PARSE, "Failed to parse HTTP Message")                \
+    XX(11, URL_TOO_LONG, "Encountered too long URL")                    \
+    XX(12, WRONG_STAGE, "Tried to parse message with parser being at wrong stage") \
     /* Implementation errors */                                         \
-    XX(12, NOT_IMPLEMENTED, "Feature not implemented yet")
+    XX(13, NOT_IMPLEMENTED, "Feature not implemented yet")
 
 typedef enum {
 #define XX(num, name, ...) HTTP_ERR_##name = num,
