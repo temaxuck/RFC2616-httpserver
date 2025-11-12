@@ -1,7 +1,7 @@
 #define HTTP_IMPL
 #include "../http.h"
 
-void noop_handler(HTTP_Response *resp, HTTP_Request *req) {
+void echo_handler(HTTP_Response *resp, HTTP_Request *req) {
     printf("Request to: %s\n", req->url.path);
     http_response_set_content_length(resp, req->content_length);
     http_response_send(resp, HTTP_Status_OK);
@@ -34,7 +34,7 @@ int main(void) {
     HTTP_Server s = {0};
     http_server_init(&s, "localhost:8080");
 
-    http_server_add_handler(&s, "/*", noop_handler);
+    http_server_add_handler(&s, "/*", echo_handler);
 
     HTTP_INFO("Running server...");
     if ((err = http_server_run(&s))) {
