@@ -11,6 +11,7 @@ Small HTTP library, written in C from scratch.
 
 ## Quick start
 
+HTTP server that responds with "Hello, World!" to every HTTP request:
 ```c
 #define HTTP_IMPL
 #include "http.h"
