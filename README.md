@@ -17,12 +17,12 @@ Small HTTP library, written in C from scratch.
 
 void hello_handler(HTTP_Response *resp, HTTP_Request *req) {
     HTTP_INFO("Request to: %s\n", req->url.path);
-    
+
     char *body = "Hello, World!\r\n";
     size_t body_sz = strlen(body);
     http_response_set_content_length(resp, body_sz);
     http_response_add_header(resp, "Content-Type", "text/plain");
-    
+
     http_response_send(resp, HTTP_Status_OK);
     http_response_write_body_chunk(resp, body, body_sz);
 }
