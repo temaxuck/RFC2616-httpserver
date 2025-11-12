@@ -40,8 +40,8 @@ HTTP_Err http_request_free(HTTP_Request *req);
 HTTP_Err http_response_free(HTTP_Response *resp);
 
 HTTP_Err http_request_set_url(HTTP_Request *req, char *url);
-HTTP_Err http_request_add_header(HTTP_Request *req, const char *hname, const char *hval);
 HTTP_Err http_request_set_method(HTTP_Request *req, HTTP_Method m);
+HTTP_Err http_request_add_header(HTTP_Request *req, const char *hname, const char *hval);
 HTTP_Err http_request_remove_header(HTTP_Request *req, const char *hname);
 HTTP_Err http_request_write_body_chunk(HTTP_Request *req, char *chunk, size_t chunk_sz);
 
@@ -72,6 +72,7 @@ HTTP_Err http_request_read_body_chunk(HTTP_Request *req, char *chunk, size_t chu
  */
 HTTP_PathComponents *http_request_pathvar(HTTP_Request *req, size_t pos);
 HTTP_PathComponents *http_request_path_components(HTTP_Request *req);
+HTTP_Err             http_response_add_header(HTTP_Response *resp, const char *hname, const char *hval);
 HTTP_Err             http_response_set_status_code(HTTP_Response *resp, uint16_t sc);
 HTTP_Err             http_response_set_content_length(HTTP_Response *resp, uint64_t content_length);
 HTTP_Err             http_response_send(HTTP_Response *resp, uint16_t sc);
@@ -183,6 +184,16 @@ HTTP_Err http_response_set_status_code(HTTP_Response *resp, uint16_t sc) {
 
 HTTP_Err http_response_set_content_length(HTTP_Response *resp, uint64_t content_length) {
     resp->content_length = content_length;
+    return HTTP_ERR_OK;
+}
+
+HTTP_Err http_response_add_header(HTTP_Response *resp, const char *hname, const char *hval) {
+    char *hn = strdup(hname);
+    if (hn == NULL) return HTTP_ERR_OOM;
+    char *hv = strdup(hval);
+    if (hv == NULL) return HTTP_ERR_OOM;
+
+    http_da_append(&resp->headers, ((HTTP_Header){ .k = hn, .v = hv }));
     return HTTP_ERR_OK;
 }
 
